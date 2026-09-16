@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
@@ -17,6 +18,8 @@ public sealed class WindowsHidTransport : IHidTransport
     private const int ErrorOperationAborted = 995;
     private const int ErrorWaitTimeout = 258;
     private const uint FileFlagOverlapped = 0x40000000;
+    private static readonly ConcurrentDictionary<string, byte> OutstandingPaths =
+        new(StringComparer.OrdinalIgnoreCase);
     private readonly Func<string, byte[], CancellationToken, Stopwatch, byte[]?> _exchangeCore;
 
     public WindowsHidTransport() : this(ExchangeCore)
@@ -43,28 +46,59 @@ public sealed class WindowsHidTransport : IHidTransport
             throw new ArgumentException("Only the confirmed 64-byte battery request is permitted.", nameof(request));
         }
 
+        var path = candidate.Path;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return Task.FromResult<byte[]?>(null);
+        }
+
         var deadline = Stopwatch.StartNew();
-        var nativeCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        nativeCancellation.CancelAfter(Math.Max(0, TimeoutMilliseconds - (int)deadline.ElapsedMilliseconds));
+        // A timed-out caller can leave cancellation cleanup pending. Reserve this path
+        // until the native worker has completed, including handle and buffer cleanup.
+        if (!OutstandingPaths.TryAdd(path, 0))
+        {
+            return Task.FromResult<byte[]?>(null);
+        }
+
+        CancellationTokenSource? nativeCancellation = null;
         Task<byte[]?> worker;
         try
         {
+            nativeCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            nativeCancellation.CancelAfter(Math.Max(0, TimeoutMilliseconds - (int)deadline.ElapsedMilliseconds));
+            var ownedCancellation = nativeCancellation!;
             worker = Task.Run(
-                () => _exchangeCore(candidate.Path, safeRequest, nativeCancellation.Token, deadline),
+                () => _exchangeCore(path, safeRequest, ownedCancellation.Token, deadline),
                 CancellationToken.None);
         }
         catch
         {
-            nativeCancellation.Dispose();
+            try
+            {
+                nativeCancellation?.Dispose();
+            }
+            finally
+            {
+                OutstandingPaths.TryRemove(path, out _);
+            }
+
             throw;
         }
 
+        var cleanupCancellation = nativeCancellation!;
         // The caller may time out while the worker still owns a pending native operation.
         // Observe any later failure without releasing those resources on the caller thread.
         _ = worker.ContinueWith(completed =>
         {
-            _ = completed.Exception;
-            nativeCancellation.Dispose();
+            try
+            {
+                _ = completed.Exception;
+                cleanupCancellation.Dispose();
+            }
+            finally
+            {
+                OutstandingPaths.TryRemove(path, out _);
+            }
         }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
 
         var remaining = Math.Max(0, TimeoutMilliseconds - (int)deadline.ElapsedMilliseconds);

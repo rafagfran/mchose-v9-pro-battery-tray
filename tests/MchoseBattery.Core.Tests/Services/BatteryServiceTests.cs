@@ -347,6 +347,61 @@ public class WindowsHidTransportTests
             await exited.Task.WaitAsync(TimeSpan.FromSeconds(5));
         }
     }
+
+    [TestMethod]
+    public async Task Exchange_RepeatedTimeoutDoesNotStartAnotherNativeOperationForSamePath()
+    {
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var exited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var release = new ManualResetEventSlim(false);
+        var calls = 0;
+        var active = 0;
+        var candidate = Candidate with { Path = "repeated-timeout-test" };
+        var transport = new WindowsHidTransport((_, _, nativeToken, _) =>
+        {
+            Interlocked.Increment(ref calls);
+            Interlocked.Increment(ref active);
+            using var registration = nativeToken.Register(() => cancelled.TrySetResult());
+            entered.TrySetResult();
+            cancelled.Task.GetAwaiter().GetResult();
+            release.Wait();
+            Interlocked.Decrement(ref active);
+            exited.TrySetResult();
+            return null;
+        });
+        var request = new byte[] { 0x55, 0x65, 0x01 }.Concat(new byte[61]).ToArray();
+        var first = transport.Exchange(candidate, request, CancellationToken.None);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        try
+        {
+            Assert.IsNull(await first.WaitAsync(TimeSpan.FromSeconds(2)));
+            Assert.IsNull(await transport.Exchange(candidate, request, CancellationToken.None)
+                .WaitAsync(TimeSpan.FromSeconds(2)));
+            Assert.AreEqual(1, calls);
+            Assert.AreEqual(1, active);
+        }
+        finally
+        {
+            cancelled.TrySetResult();
+            release.Set();
+            await exited.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+
+        // Once the original worker has actually completed cleanup, the path is reusable.
+        var recoveryDeadline = System.Diagnostics.Stopwatch.StartNew();
+        while (Volatile.Read(ref calls) == 1 && recoveryDeadline.Elapsed < TimeSpan.FromSeconds(2))
+        {
+            await transport.Exchange(candidate, request, CancellationToken.None);
+            if (Volatile.Read(ref calls) == 1)
+            {
+                await Task.Delay(10);
+            }
+        }
+
+        Assert.AreEqual(2, calls);
+    }
 }
 
 [TestClass]
