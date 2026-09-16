@@ -7,6 +7,11 @@
     <Nullable>enable</Nullable>
     <AssemblyName>MchoseBattery</AssemblyName>
     <RootNamespace>MchoseBattery.Tray</RootNamespace>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <Product>MCHOSE Battery</Product>
+    <AssemblyTitle>MCHOSE Battery</AssemblyTitle>
+    <Version>1.0.0</Version>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\MchoseBattery.Core\MchoseBattery.Core.csproj" />

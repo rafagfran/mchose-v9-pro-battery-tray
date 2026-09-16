@@ -13,7 +13,8 @@ public sealed class TrayApplicationContext : ApplicationContext
     private readonly ToolStripMenuItem _status;
     private readonly ToolStripMenuItem _startup;
     private readonly NotifyIcon _notifyIcon;
-    private readonly Icon _icon;
+    private Icon _icon;
+    private string _iconKey;
     private readonly DeviceNotificationWindow _notificationWindow;
     private bool _disposed;
 
@@ -28,7 +29,8 @@ public sealed class TrayApplicationContext : ApplicationContext
         var exit = new ToolStripMenuItem("Sair", null, (_, _) => ExitThread());
         _menu = new ContextMenuStrip();
         _menu.Items.AddRange(new ToolStripItem[] { _status, new ToolStripSeparator(), refresh, _startup, exit });
-        _icon = (Icon)SystemIcons.Information.Clone();
+        _icon = BatteryTrayIcon.Create(_service.CurrentSnapshot, IconEdge);
+        _iconKey = BuildIconKey(_service.CurrentSnapshot);
         _notifyIcon = new NotifyIcon
         {
             Icon = _icon,
@@ -69,9 +71,44 @@ public sealed class TrayApplicationContext : ApplicationContext
             return;
         }
 
-        var text = GetStatusText(_service.CurrentSnapshot);
+        var snapshot = _service.CurrentSnapshot;
+        var text = GetStatusText(snapshot);
         _status.Text = text;
         _notifyIcon.Text = text;
+        UpdateIcon(snapshot);
+    }
+
+    private static int IconEdge => Math.Max(SystemInformation.SmallIconSize.Width, 16);
+
+    private static string BuildIconKey(BatterySnapshot snapshot) =>
+        $"{BatteryTrayIcon.GetIconText(snapshot)}|{BatteryTrayIcon.GetBackgroundColor(snapshot).ToArgb()}|{IconEdge}";
+
+    private void UpdateIcon(BatterySnapshot snapshot)
+    {
+        var key = BuildIconKey(snapshot);
+        if (key == _iconKey)
+        {
+            return;
+        }
+
+        Icon rendered;
+        try
+        {
+            rendered = BatteryTrayIcon.Create(snapshot, IconEdge);
+        }
+        catch (Exception ex)
+        {
+            // A failed render must never take down the tray; keep the previous icon.
+            _logger.Write($"Cannot render the tray icon ({ex.GetType().Name}).");
+            return;
+        }
+
+        var previous = _icon;
+        _icon = rendered;
+        _iconKey = key;
+        // Shell_NotifyIcon copies the icon on assignment, so the old one is free afterwards.
+        _notifyIcon.Icon = rendered;
+        previous.Dispose();
     }
 
     private void InitializeStartupState()
