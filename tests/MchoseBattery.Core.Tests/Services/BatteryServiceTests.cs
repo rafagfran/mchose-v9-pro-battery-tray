@@ -169,6 +169,89 @@ public class BatteryServiceTests
         Assert.AreEqual(BatteryConnectionState.DongleNotFound, snapshot.State);
     }
 
+    [TestMethod]
+    public async Task RequestRefresh_DoesNotBlockCallerWhileEnumerationIsBlocked()
+    {
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var service = new BatteryService(
+            () =>
+            {
+                entered.TrySetResult();
+                release.Task.GetAwaiter().GetResult();
+                return Array.Empty<HidDeviceInfo>();
+            },
+            new FakeTransport((_, _) => Task.FromResult<byte[]?>(null)),
+            new FakeLogger(),
+            startPolling: false);
+
+        var caller = Task.Run(service.RequestRefresh);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        try
+        {
+            await caller.WaitAsync(TimeSpan.FromMilliseconds(250));
+        }
+        finally
+        {
+            release.TrySetResult();
+            await caller;
+        }
+    }
+
+    [TestMethod]
+    public async Task RefreshAsync_CancelledFinalExchangePreservesConnectedSnapshot()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var query = 0;
+        using var service = CreateService(new[] { Candidate }, (_, _) =>
+        {
+            if (Interlocked.Increment(ref query) == 1)
+            {
+                return Task.FromResult<byte[]?>(ValidReply(61));
+            }
+
+            cancellation.Cancel();
+            return Task.FromResult<byte[]?>(null);
+        });
+        var connected = await service.RefreshAsync(CancellationToken.None);
+
+        var afterCancellation = await service.RefreshAsync(cancellation.Token);
+
+        Assert.AreEqual(connected, afterCancellation);
+        Assert.AreEqual(BatteryConnectionState.Connected, service.CurrentSnapshot.State);
+    }
+
+    [TestMethod]
+    public async Task RefreshAsync_QueuedBeforeDisposeDoesNotEnumerateAfterDispose()
+    {
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var enumerations = 0;
+        using var service = new BatteryService(
+            () =>
+            {
+                Interlocked.Increment(ref enumerations);
+                return new[] { Candidate };
+            },
+            new FakeTransport(async (_, _) =>
+            {
+                entered.TrySetResult();
+                await release.Task;
+                return ValidReply(50);
+            }),
+            new FakeLogger(),
+            startPolling: false);
+
+        var first = service.RefreshAsync(CancellationToken.None);
+        await entered.Task;
+        var queued = service.RefreshAsync(CancellationToken.None);
+        service.Dispose();
+        release.TrySetResult();
+        await Task.WhenAll(first, queued);
+
+        Assert.AreEqual(1, enumerations);
+    }
+
     private static BatteryService CreateService(
         IReadOnlyList<HidDeviceInfo> devices,
         Func<HidDeviceInfo, CancellationToken, Task<byte[]?>> exchange)
@@ -226,6 +309,43 @@ public class WindowsHidTransportTests
         var transport = new WindowsHidTransport();
 
         Assert.ThrowsException<ArgumentException>(() => transport.Exchange(Candidate, new byte[64], CancellationToken.None));
+    }
+
+    [TestMethod]
+    public async Task Exchange_ReturnsByDeadlineWhileNativeCleanupRemainsPending()
+    {
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var exited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var release = new ManualResetEventSlim(false);
+        var transport = new WindowsHidTransport((_, _, nativeToken, _) =>
+        {
+            using var registration = nativeToken.Register(() => cancelled.TrySetResult());
+            entered.TrySetResult();
+            cancelled.Task.GetAwaiter().GetResult();
+            release.Wait();
+            exited.TrySetResult();
+            return null;
+        });
+        var request = new byte[] { 0x55, 0x65, 0x01 }.Concat(new byte[61]).ToArray();
+        var elapsed = System.Diagnostics.Stopwatch.StartNew();
+        var exchange = transport.Exchange(Candidate, request, CancellationToken.None);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        try
+        {
+            await cancelled.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            var reply = await exchange.WaitAsync(TimeSpan.FromSeconds(2));
+            Assert.IsNull(reply);
+            Assert.IsTrue(elapsed.Elapsed < TimeSpan.FromMilliseconds(750));
+            Assert.IsFalse(exited.Task.IsCompleted);
+        }
+        finally
+        {
+            cancelled.TrySetResult();
+            release.Set();
+            await exited.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        }
     }
 }
 

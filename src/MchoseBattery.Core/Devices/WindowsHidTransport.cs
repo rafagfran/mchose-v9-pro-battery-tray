@@ -1,8 +1,11 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 using Microsoft.Win32.SafeHandles;
 using MchoseBattery.Core.Protocol;
+
+[assembly: InternalsVisibleTo("MchoseBattery.Core.Tests")]
 
 namespace MchoseBattery.Core.Devices;
 
@@ -14,6 +17,16 @@ public sealed class WindowsHidTransport : IHidTransport
     private const int ErrorOperationAborted = 995;
     private const int ErrorWaitTimeout = 258;
     private const uint FileFlagOverlapped = 0x40000000;
+    private readonly Func<string, byte[], CancellationToken, Stopwatch, byte[]?> _exchangeCore;
+
+    public WindowsHidTransport() : this(ExchangeCore)
+    {
+    }
+
+    internal WindowsHidTransport(Func<string, byte[], CancellationToken, Stopwatch, byte[]?> exchangeCore)
+    {
+        _exchangeCore = exchangeCore ?? throw new ArgumentNullException(nameof(exchangeCore));
+    }
 
     public Task<byte[]?> Exchange(HidDeviceInfo candidate, byte[] request, CancellationToken cancellationToken)
     {
@@ -30,18 +43,61 @@ public sealed class WindowsHidTransport : IHidTransport
             throw new ArgumentException("Only the confirmed 64-byte battery request is permitted.", nameof(request));
         }
 
-        if (!OperatingSystem.IsWindows())
+        var deadline = Stopwatch.StartNew();
+        var nativeCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        nativeCancellation.CancelAfter(Math.Max(0, TimeoutMilliseconds - (int)deadline.ElapsedMilliseconds));
+        Task<byte[]?> worker;
+        try
         {
-            return Task.FromResult<byte[]?>(null);
+            worker = Task.Run(
+                () => _exchangeCore(candidate.Path, safeRequest, nativeCancellation.Token, deadline),
+                CancellationToken.None);
+        }
+        catch
+        {
+            nativeCancellation.Dispose();
+            throw;
         }
 
-        return Task.Run(() => ExchangeCore(candidate.Path, safeRequest, cancellationToken), cancellationToken);
+        // The caller may time out while the worker still owns a pending native operation.
+        // Observe any later failure without releasing those resources on the caller thread.
+        _ = worker.ContinueWith(completed =>
+        {
+            _ = completed.Exception;
+            nativeCancellation.Dispose();
+        }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+
+        var remaining = Math.Max(0, TimeoutMilliseconds - (int)deadline.ElapsedMilliseconds);
+        return AwaitByDeadline(worker, TimeSpan.FromMilliseconds(remaining), cancellationToken);
     }
 
-    private static byte[]? ExchangeCore(string path, byte[] request, CancellationToken cancellationToken)
+    private static async Task<byte[]?> AwaitByDeadline(
+        Task<byte[]?> worker, TimeSpan remaining, CancellationToken cancellationToken)
     {
+        try
+        {
+            return await worker.WaitAsync(remaining, cancellationToken).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            return null;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // The native deadline cancelled the worker, not the caller.
+            return null;
+        }
+    }
+
+    private static byte[]? ExchangeCore(
+        string path, byte[] request, CancellationToken cancellationToken, Stopwatch deadline)
+    {
+        if (!OperatingSystem.IsWindows() || deadline.ElapsedMilliseconds >= TimeoutMilliseconds)
+        {
+            return null;
+        }
+
         cancellationToken.ThrowIfCancellationRequested();
-        var deadline = Stopwatch.StartNew();
         using var device = CreateFile(
             path,
             0x80000000 | 0x40000000, // GENERIC_READ | GENERIC_WRITE

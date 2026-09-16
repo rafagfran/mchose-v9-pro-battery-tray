@@ -41,14 +41,17 @@ public sealed class BatteryService : IDisposable
 
     public async Task<BatterySnapshot> RefreshAsync(CancellationToken cancellationToken)
     {
-        if (Volatile.Read(ref _disposed) != 0)
+        if (IsStopped(cancellationToken))
         {
             return CurrentSnapshot;
         }
 
+        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken, _pollCancellation.Token);
+        var refreshToken = linkedCancellation.Token;
         try
         {
-            await _refreshGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            await _refreshGate.WaitAsync(refreshToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -57,6 +60,11 @@ public sealed class BatteryService : IDisposable
 
         try
         {
+            if (IsStopped(refreshToken))
+            {
+                return CurrentSnapshot;
+            }
+
             HidDeviceInfo[] candidates;
             try
             {
@@ -68,6 +76,11 @@ public sealed class BatteryService : IDisposable
                 return CurrentSnapshot;
             }
 
+            if (IsStopped(refreshToken))
+            {
+                return CurrentSnapshot;
+            }
+
             if (candidates.Length == 0)
             {
                 return Publish(new BatterySnapshot(BatteryConnectionState.DongleNotFound, null));
@@ -75,7 +88,7 @@ public sealed class BatteryService : IDisposable
 
             foreach (var candidate in candidates)
             {
-                if (cancellationToken.IsCancellationRequested)
+                if (IsStopped(refreshToken))
                 {
                     return CurrentSnapshot;
                 }
@@ -83,7 +96,12 @@ public sealed class BatteryService : IDisposable
                 try
                 {
                     var reply = await _transport.Exchange(
-                        candidate, MchoseProtocol.CreateBatteryRequest(), cancellationToken).ConfigureAwait(false);
+                        candidate, MchoseProtocol.CreateBatteryRequest(), refreshToken).ConfigureAwait(false);
+                    if (IsStopped(refreshToken))
+                    {
+                        return CurrentSnapshot;
+                    }
+
                     if (reply is null)
                     {
                         continue;
@@ -91,12 +109,17 @@ public sealed class BatteryService : IDisposable
 
                     if (MchoseProtocol.TryParseBatteryResponse(reply, out var reading))
                     {
+                        if (IsStopped(refreshToken))
+                        {
+                            return CurrentSnapshot;
+                        }
+
                         return Publish(new BatterySnapshot(BatteryConnectionState.Connected, reading.Percentage));
                     }
 
                     LogFailure("Invalid battery reply.");
                 }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                catch (OperationCanceledException) when (IsStopped(refreshToken))
                 {
                     return CurrentSnapshot;
                 }
@@ -106,7 +129,9 @@ public sealed class BatteryService : IDisposable
                 }
             }
 
-            return Publish(new BatterySnapshot(BatteryConnectionState.HeadsetDisconnected, null));
+            return IsStopped(refreshToken)
+                ? CurrentSnapshot
+                : Publish(new BatterySnapshot(BatteryConnectionState.HeadsetDisconnected, null));
         }
         catch (Exception ex)
         {
@@ -123,7 +148,9 @@ public sealed class BatteryService : IDisposable
     {
         if (Volatile.Read(ref _disposed) == 0)
         {
-            _ = RefreshAsync(CancellationToken.None);
+            // RefreshAsync may enumerate synchronously before its first incomplete await.
+            // Schedule the entire refresh away from the tray notification caller.
+            _ = Task.Run(() => RefreshAsync(_pollCancellation.Token), _pollCancellation.Token);
         }
     }
 
@@ -207,4 +234,9 @@ public sealed class BatteryService : IDisposable
             // A custom logger must not be able to break polling.
         }
     }
+
+    private bool IsStopped(CancellationToken cancellationToken) =>
+        cancellationToken.IsCancellationRequested ||
+        _pollCancellation.IsCancellationRequested ||
+        Volatile.Read(ref _disposed) != 0;
 }
