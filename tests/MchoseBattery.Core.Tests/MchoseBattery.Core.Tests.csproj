@@ -12,5 +12,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\MchoseBattery.Core\MchoseBattery.Core.csproj" />
+    <ProjectReference Include="..\..\src\MchoseBattery.Tray\MchoseBattery.Tray.csproj" />
   </ItemGroup>
 </Project>

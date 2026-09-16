@@ -6,6 +6,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MchoseBattery.Core", "src\M
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MchoseBattery.Core.Tests", "tests\MchoseBattery.Core.Tests\MchoseBattery.Core.Tests.csproj", "{5E38B228-DFF6-4B9B-8E86-1F5091BBFCB3}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MchoseBattery.Tray", "src\MchoseBattery.Tray\MchoseBattery.Tray.csproj", "{BB45F99B-2710-4331-8DA8-2C7461C218D3}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -20,5 +22,9 @@ Global
 		{5E38B228-DFF6-4B9B-8E86-1F5091BBFCB3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5E38B228-DFF6-4B9B-8E86-1F5091BBFCB3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5E38B228-DFF6-4B9B-8E86-1F5091BBFCB3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BB45F99B-2710-4331-8DA8-2C7461C218D3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BB45F99B-2710-4331-8DA8-2C7461C218D3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BB45F99B-2710-4331-8DA8-2C7461C218D3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BB45F99B-2710-4331-8DA8-2C7461C218D3}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
