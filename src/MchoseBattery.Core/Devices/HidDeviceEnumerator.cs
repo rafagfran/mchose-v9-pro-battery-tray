@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Text;
 using MchoseBattery.Core.Interop;
@@ -33,8 +34,13 @@ public sealed class HidDeviceEnumerator
             if (!NativeHid.SetupDiEnumDeviceInterfaces(
                     deviceInfoSet, IntPtr.Zero, ref hidGuid, index, ref interfaceData))
             {
-                // Device removal or access failure is nonfatal to callers.
-                break;
+                var error = Marshal.GetLastWin32Error();
+                if (error == NativeHid.ErrorNoMoreItems)
+                {
+                    break;
+                }
+
+                throw new Win32Exception(error, "Failed to enumerate HID device interfaces.");
             }
 
             var path = GetDevicePath(deviceInfoSet, ref interfaceData);
