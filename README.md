@@ -1,44 +1,39 @@
 # MCHOSE V9 Pro Battery Tray
 
-A tiny Windows tray application that shows the battery level of the **MCHOSE V9 Pro**
-wireless headset, read straight from its 2.4 GHz USB dongle — without running MCHOSE HUB.
+Aplicativo minúsculo de bandeja para Windows que mostra a bateria do headset sem fio
+**MCHOSE V9 Pro**, lida direto do dongle USB 2.4 GHz — sem precisar do MCHOSE HUB.
 
-The percentage is drawn **inside the tray icon**, so you read it at a glance:
+O percentual é desenhado **dentro do ícone da bandeja**, então você lê de relance:
 
-![Tray icon states at 16, 24 and 32 pixels](docs/img/tray-icons.png)
+![Estados do ícone em 16, 24 e 32 pixels](docs/img/tray-icons.png)
 
-*Rendered at 16 px, 24 px and 32 px (top to bottom), magnified 4x to show the actual pixel grid.*
+*Renderizado em 16 px, 24 px e 32 px (de cima para baixo), ampliado 4x para mostrar a grade real de pixels.*
 
-> 🇧🇷 [Leia em português](README.pt-BR.md)
+## Por quê
 
-## Why
+O MCHOSE HUB precisa ficar aberto só para informar a carga. Este aplicativo faz o mesmo
+a partir de um único executável autocontido que mora na bandeja, não custa nada enquanto
+está ocioso e envia exatamente um relatório HID somente-leitura a cada 30 segundos.
 
-MCHOSE HUB has to stay running to tell you the battery level. This does the same job from
-a single self-contained executable that sits in the tray, costs nothing while idle, and
-sends exactly one read-only HID report every 30 seconds.
+## Recursos
 
-## Features
+- **Legível de relance** — a carga é o próprio ícone, não uma dica que exige o mouse.
+- **Sem janela, sem instalador** — um `.exe` autocontido e entrada opcional na inicialização.
+- **Sobrevive a tudo** — dongle removido, headset desligado, timeouts e respostas malformadas
+  são todos não-fatais; a bandeja nunca morre e se recupera sozinha.
+- **Somente leitura por design** — envia um único comando conhecido de consulta e nada mais.
+- **Sem dependências** — nenhum pacote NuGet de HID; P/Invoke direto em `setupapi.dll`,
+  `hid.dll` e `kernel32.dll`.
 
-- **Readable at a glance** — the charge is the icon, not a tooltip you have to hover.
-- **No window, no installer** — one self-contained `.exe`, optional Windows startup entry.
-- **Survives everything** — dongle unplugged, headset powered off, timeouts and malformed
-  replies are all non-fatal; the tray never dies and recovers on its own.
-- **Read-only by design** — it sends one known battery-query report and nothing else.
-- **No dependencies** — no HID NuGet package; direct P/Invoke into `setupapi.dll`,
-  `hid.dll` and `kernel32.dll`.
+## Requisitos
 
-## Requirements
+- Windows 10 ou 11 (x64; o código é neutro quanto à arquitetura e também publica `win-arm64`)
+- Um MCHOSE V9 Pro com seu dongle 2.4 GHz — USB VID:PID `291D:385D`
+- [.NET SDK 8](https://dotnet.microsoft.com/download/dotnet/8.0) para compilar
 
-- Windows 10 or 11 (x64; the source is architecture-neutral and also publishes `win-arm64`)
-- An MCHOSE V9 Pro with its 2.4 GHz dongle — USB VID:PID `291D:385D`
-- [.NET SDK 8](https://dotnet.microsoft.com/download/dotnet/8.0) to build from source
+## Instalação
 
-> **Heads-up:** the tray menu is in Portuguese (`Atualizar agora`, `Abrir ao iniciar o
-> Windows`, `Sair`). Everything else — CLI, logs, this document — is in English.
-
-## Install
-
-Build it yourself (there is no signed release yet):
+Compile você mesmo (ainda não há release assinada):
 
 ```powershell
 git clone https://github.com/rafagfran/mchose-v9-pro-battery-tray.git
@@ -46,98 +41,98 @@ cd mchose-v9-pro-battery-tray
 dotnet publish src/MchoseBattery.Tray -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true
 ```
 
-The executable lands in
+O executável aparece em
 `src/MchoseBattery.Tray/bin/Release/net8.0-windows/win-x64/publish/MchoseBattery.exe`.
-Copy it anywhere and run it.
+Copie para onde quiser e execute.
 
-**Pin it to the taskbar:** Windows hides new tray icons in the overflow menu. To keep it
-always visible go to *Settings → Personalization → Taskbar → Other system tray icons* and
-turn **MchoseBattery** on.
+**Para fixar na barra de tarefas:** o Windows esconde ícones novos no menu de estouro.
+Para mantê-lo sempre visível vá em *Configurações → Personalização → Barra de tarefas →
+Outros ícones da bandeja do sistema* e ligue **MchoseBattery**.
 
-## Development
+## Desenvolvimento
 
 ```powershell
 dotnet restore
 dotnet build
-dotnet test tests/MchoseBattery.Core.Tests    # 56 tests, no hardware needed
+dotnet test tests/MchoseBattery.Core.Tests    # 56 testes, sem necessidade de hardware
 dotnet run --project src/MchoseBattery.Tray
 ```
 
-## Tray icon
+## Ícone da bandeja
 
-| Charge | Colour | Icon text |
+| Carga | Cor | Texto no ícone |
 |---|---|---|
-| 0–20% | red | `0`..`20` |
-| 21–40% | amber | `21`..`40` |
-| 41–100% | green | `41`..`100` |
-| Headset off / out of range | grey | `--` |
-| Dongle not found | grey | `?` |
+| 0–20% | vermelho | `0`..`20` |
+| 21–40% | âmbar | `21`..`40` |
+| 41–100% | verde | `41`..`100` |
+| Headset desligado / fora de alcance | cinza | `--` |
+| Dongle não encontrado | cinza | `?` |
 
-The icon is redrawn at whatever size Windows asks for (`SystemInformation.SmallIconSize`),
-so it follows DPI scaling, and it is only re-rendered when the text or colour actually
-changes. The background is a filled rounded square so the glyph keeps its contrast on both
-the light and the dark taskbar.
+O ícone é redesenhado no tamanho que o Windows pedir (`SystemInformation.SmallIconSize`),
+então acompanha a escala de DPI, e só é refeito quando o texto ou a cor realmente mudam.
+O fundo é um quadrado arredondado preenchido, para o número manter contraste tanto na
+barra clara quanto na escura.
 
-## Tray menu
+## Menu da bandeja
 
-| Item | Effect |
+| Item | Efeito |
 |---|---|
-| `MCHOSE V9 Pro: NN%` | Current state (informational, disabled) |
-| `Atualizar agora` | Force an immediate read |
-| `Abrir ao iniciar o Windows` | Add/remove `MchoseBattery` under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` |
-| `Sair` | Quit |
+| `MCHOSE V9 Pro: NN%` | Estado atual (informativo, desabilitado) |
+| `Atualizar agora` | Força uma leitura imediata |
+| `Abrir ao iniciar o Windows` | Grava/remove `MchoseBattery` em `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` |
+| `Sair` | Encerra |
 
-## Refresh behaviour
+## Como as leituras acontecem
 
-It is **not** a live counter. Readings happen:
+**Não** é um contador ao vivo. As leituras ocorrem:
 
-- once at startup,
-- every **30 seconds** thereafter,
-- immediately when Windows reports a HID device arriving or leaving,
-- immediately when you click `Atualizar agora`.
+- uma vez na abertura,
+- a cada **30 segundos** depois disso,
+- imediatamente quando o Windows avisa que um dispositivo HID entrou ou saiu,
+- imediatamente quando você clica em `Atualizar agora`.
 
-So the number can be up to 30 seconds stale. For a headset battery that is irrelevant —
-the charge does not move 1% in half a minute — and polling harder just keeps the 2.4 GHz
-radio busy for no benefit.
+Ou seja, o número pode estar até 30 segundos desatualizado. Para bateria de headset isso
+é irrelevante — a carga não cai 1% em meio minuto — e ler com mais frequência só mantém
+o rádio 2.4 GHz ocupado sem nenhum ganho.
 
-## Diagnostics
+## Diagnóstico
 
 ```powershell
-MchoseBattery.exe --diagnose                    # or --list-hid: enumerate every HID collection; sends nothing
-MchoseBattery.exe --inspect-device "<path>"     # capabilities of one collection; sends nothing
-MchoseBattery.exe --probe-battery "<path>"      # the only mode that writes; prints request/reply in hex
+MchoseBattery.exe --diagnose                    # ou --list-hid: lista todas as coleções HID; não envia nada
+MchoseBattery.exe --inspect-device "<caminho>"  # capacidades de uma coleção; não envia nada
+MchoseBattery.exe --probe-battery "<caminho>"   # único modo que escreve; imprime request/reply em hex
 ```
 
-`--probe-battery` requires the full path printed by `--diagnose`, refuses any device that
-is not `291D:385D` with 64-byte input and output reports, and refuses a path that does not
-identify exactly one currently-present HID collection.
+`--probe-battery` exige o caminho completo impresso por `--diagnose`, recusa qualquer
+dispositivo que não seja `291D:385D` com reports de entrada e saída de 64 bytes, e recusa
+caminho que não identifique exatamente uma coleção HID presente no momento.
 
-Because the executable is a `WinExe`, redirect the output if your console does not attach
-automatically: `MchoseBattery.exe --diagnose | Out-String`.
+Como o executável é `WinExe`, redirecione a saída se o seu console não anexar
+automaticamente: `MchoseBattery.exe --diagnose | Out-String`.
 
-## Protocol
+## Protocolo
 
-The profile below was reverse-engineered for interoperability and
-**confirmed against real hardware**:
+O perfil foi obtido por engenharia reversa para fins de interoperabilidade e
+**confirmado em hardware real**:
 
 ```text
-VID:PID     291D:385D
-Frame       64 bytes (both input and output)
-Request     55 65 01 00 ... 00
-Signature   55 65
-Battery     reply byte 2, direct percentage 0..100
-Status      reply byte 3, recorded but NOT interpreted
-Timeout     500 ms
+VID:PID      291D:385D
+Frame        64 bytes (entrada e saída)
+Request      55 65 01 00 ... 00
+Assinatura   55 65
+Bateria      byte 2 da resposta, percentual direto 0..100
+Status       byte 3 da resposta, registrado mas NÃO interpretado
+Timeout      500 ms
 ```
 
-### Hardware capture
+### Captura em hardware
 
 ```text
 Path:         \\?\hid#vid_291d&pid_385d&mi_00&col05#...
 VID:PID:      291D:385D; Version: 0x0012
 Manufacturer: C-Media Electronics Inc
 Product:      MCHOSE V9 PRO
-Usage Page:   0xFF90; Usage: 0x0001   (vendor-defined)
+Usage Page:   0xFF90; Usage: 0x0001   (definido pelo fabricante)
 Input: 64; Output: 64; Feature: 0
 
 Request:  55 65 01 00 ... 00
@@ -145,63 +140,64 @@ Reply:    55 65 14 02 00 ... 00
 Battery:  20%; status: 0x02
 ```
 
-The collection that answers is **`col05`** of interface `mi_00`, on vendor-defined
-Usage Page `0xFF90`. Reply byte 2 (`0x14` = 20) carries the percentage directly.
+A coleção que responde é a **`col05`** da interface `mi_00`, na Usage Page de fabricante
+`0xFF90`. O byte 2 da resposta (`0x14` = 20) carrega o percentual diretamente.
 
-Byte 3 (`0x02`) is deliberately left uninterpreted. One sample is not enough to claim it
-means "charging", "in use", or anything else — `--probe-battery` prints it and the app
-otherwise ignores it.
+O byte 3 (`0x02`) é deliberadamente deixado sem interpretação. Uma única amostra não
+basta para afirmar que ele significa "carregando", "em uso" ou qualquer outra coisa —
+o `--probe-battery` o imprime e o aplicativo o ignora.
 
-## Safety boundary
+## Limite de segurança
 
-The app sends **only** the read-only request above, and only after a device matches the
-profile. No firmware, EQ, RGB, volume, or unknown command is ever issued, and
-firmware-related feature reports are deliberately out of scope. `WindowsHidTransport`
-re-validates the candidate predicate and accepts only a byte-for-byte copy of the canonical request, so a caller cannot smuggle a different
-payload through.
+O aplicativo envia **apenas** o request de leitura acima, e só depois que um dispositivo
+casa com o perfil. Nenhum comando de firmware, EQ, RGB, volume ou desconhecido é emitido,
+e Feature Reports relacionados a firmware estão deliberadamente fora de escopo. O
+`WindowsHidTransport` revalida o predicado de candidato e aceita apenas uma cópia byte a
+byte do request canônico, então um chamador não consegue contrabandear outro payload.
 
-Plain V9 (non-Pro) is **not** assumed compatible. If it does not answer with a valid
-signature you simply get `Headset desconectado`; the app will not go hunting for other
-commands.
+O V9 comum (não Pro) **não** é assumido como compatível. Se ele não responder com
+assinatura válida, você simplesmente vê `Headset desconectado`; o aplicativo não sai
+tentando outros comandos.
 
-## States
+## Estados
 
-| State | Meaning |
+| Estado | Significado |
 |---|---|
-| `Dongle não encontrado` | No `291D:385D` collection with 64-byte reports |
-| `Headset desconectado` | Dongle present, no valid reply (headset off, out of range, or timeout) |
-| `MCHOSE V9 Pro: NN%` | Reply validated by the parser |
+| `Dongle não encontrado` | Nenhuma coleção `291D:385D` com reports de 64 bytes |
+| `Headset desconectado` | Dongle presente, sem resposta válida (headset desligado, fora de alcance ou timeout) |
+| `MCHOSE V9 Pro: NN%` | Resposta validada pelo parser |
 
 ## Logs
 
-`%LocalAppData%\MchoseBattery\mchose-battery.log`, capped at 256 KiB (oldest data is
-dropped). Only state transitions and failures are written — a successful, unchanged poll
-logs nothing.
+`%LocalAppData%\MchoseBattery\mchose-battery.log`, limitado a 256 KiB (o trecho mais
+antigo é descartado). Somente transições de estado e falhas são gravadas — uma leitura
+bem-sucedida e sem mudança não gera linha nenhuma.
 
-## Project layout
+## Estrutura do projeto
 
 ```text
-src/MchoseBattery.Core            native HID enumeration, protocol, transport, polling, logging
-src/MchoseBattery.Tray            windowless WinForms executable, diagnostics CLI, startup registration
-tests/MchoseBattery.Core.Tests    MSTest suite, no hardware required
+src/MchoseBattery.Core            enumeração HID nativa, protocolo, transporte, polling, log
+src/MchoseBattery.Tray            executável WinForms sem janela, CLI de diagnóstico, inicialização
+tests/MchoseBattery.Core.Tests    suíte MSTest, sem necessidade de hardware
 ```
 
-## Contributing
+## Contribuindo
 
-Captures from other MCHOSE models are genuinely useful. If you own one, run
-`--diagnose`, then `--probe-battery` on a `291D:385D` collection, and open an issue with
-the output — especially if reply byte 3 changes while charging. That is the fastest way to
-learn what the status byte actually means, and whether other models share the profile.
+Capturas de outros modelos MCHOSE são realmente úteis. Se você tem um, rode `--diagnose`,
+depois `--probe-battery` numa coleção `291D:385D`, e abra uma issue com a saída —
+principalmente se o byte 3 da resposta mudar durante o carregamento. Esse é o caminho
+mais rápido para descobrir o que o byte de status significa de fato, e se outros modelos
+compartilham o mesmo perfil.
 
-## Licence and disclaimer
+## Licença e isenção de responsabilidade
 
-Released under the MIT licence — see [LICENSE](LICENSE).
+Distribuído sob a licença MIT — veja [LICENSE](LICENSE).
 
-This is an independent project with **no affiliation with, sponsorship by, or endorsement
-from MCHOSE or C-Media Electronics**. "MCHOSE" and "V9 Pro" are trademarks of their
-respective owners and are used here only to identify compatible hardware.
+Este é um projeto independente, **sem qualquer vínculo, patrocínio ou aprovação da MCHOSE
+ou da C-Media Electronics**. "MCHOSE" e "V9 Pro" são marcas de seus respectivos donos e
+aparecem aqui apenas para identificar o hardware compatível.
 
-The protocol was reverse-engineered for interoperability purposes and confirmed on
-hardware owned by the author. The application issues a single
-read command and no write, firmware, or configuration command. Even so, the software is
-provided "as is", without warranty: running it against your device is at your own risk.
+O protocolo foi obtido por engenharia reversa para fins de interoperabilidade e
+confirmado em hardware próprio. O aplicativo emite um único comando de leitura e nenhum
+comando de escrita, firmware ou configuração. Ainda assim, o software é fornecido "como
+está", sem garantia: executá-lo contra o seu dispositivo é por sua conta e risco.
