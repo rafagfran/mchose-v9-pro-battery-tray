@@ -1,0 +1,11 @@
+# .NET build outputs
+[Bb]in/
+[Oo]bj/
+
+# IDE and user-specific files
+.vs/
+*.user
+*.suo
+
+# Superpowers working artifacts
+.superpowers/

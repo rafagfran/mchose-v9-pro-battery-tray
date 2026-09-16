@@ -1,0 +1,24 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MchoseBattery.Core", "src\MchoseBattery.Core\MchoseBattery.Core.csproj", "{A6BF01C4-C44A-4B6C-9591-0A252B0D3615}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MchoseBattery.Core.Tests", "tests\MchoseBattery.Core.Tests\MchoseBattery.Core.Tests.csproj", "{5E38B228-DFF6-4B9B-8E86-1F5091BBFCB3}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A6BF01C4-C44A-4B6C-9591-0A252B0D3615}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A6BF01C4-C44A-4B6C-9591-0A252B0D3615}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A6BF01C4-C44A-4B6C-9591-0A252B0D3615}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A6BF01C4-C44A-4B6C-9591-0A252B0D3615}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5E38B228-DFF6-4B9B-8E86-1F5091BBFCB3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5E38B228-DFF6-4B9B-8E86-1F5091BBFCB3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5E38B228-DFF6-4B9B-8E86-1F5091BBFCB3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5E38B228-DFF6-4B9B-8E86-1F5091BBFCB3}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
